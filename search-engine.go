@@ -42,7 +42,7 @@ var (
 	CkData map[string]ChunkData
 )
 
-func Search(tree *Treenode, limit int, timex, timey ftime.CTime) (listdata []string) {
+func Search(tree *Treenode, limit int, timex, timey ftime.CTime) (listdata []responseData) {
 	Timex := ParseStr(TimeToStr(timex))
 	Timey := ParseStr(TimeToStr(timey))
 	Buffx := docInvert(Timex.Year(), int(Timex.Month()), Timex.Day(), Timex.Hour(), 0)
@@ -73,11 +73,17 @@ func Search(tree *Treenode, limit int, timex, timey ftime.CTime) (listdata []str
 		checkerror(err)
 		if TIME64 >= timex.UnixMilli() && TIME64 <= timey.UnixMilli() {
 			DisplayTime := time.UnixMilli(int64(TIME64))
-			listdata = append(listdata, DisplayTime.UTC().Format("2006-01-02T15:04:05")+" "+DOCID+" "+HEADLINE+"\n")
+			// listdata = append(listdata, DisplayTime.UTC().Format("2006-01-02T15:04:05")+" "+DOCID+" "+HEADLINE+"\n")
+			listdata = append(listdata, responseData{DisplayTime.UTC().Format("2006-01-02T15:04:05"), DOCID, HEADLINE})
+		}
+		if len(listdata) >= limit {
+			break
 		}
 	}
 	sort.Slice(listdata, func(i, j int) bool {
-		return listdata[i] < listdata[j]
+		tx, _ := time.Parse("2006-01-02T15:04:05", listdata[i].Date)
+		ty, _ := time.Parse("2006-01-02T15:04:05", listdata[j].Date)
+		return tx.Before(ty)
 	})
 	return
 }

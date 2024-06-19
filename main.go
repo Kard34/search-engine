@@ -14,6 +14,7 @@ import (
 	wbGo "github.com/Kard34/search-engine/dataxet/iq-wordbreak"
 	"github.com/Kard34/search-engine/ftime"
 	"github.com/Kard34/search-engine/qp"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -23,7 +24,10 @@ type inputData struct {
 	Limit int    `json: "limit"`
 }
 
-type result1 struct {
+type responseData struct {
+	Date     string `json: "displaytime"`
+	DocID    string `json: "id"`
+	Headline string `json: "headline'`
 }
 
 var (
@@ -46,7 +50,12 @@ func main() {
 	defer Db.Close()
 
 	app := fiber.New()
-	app.Get("/search", searchData)
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST",
+		AllowHeaders: "Content-Type",
+	}))
+	app.Post("/search", searchData)
 	wordbreak("")
 	app.Listen(":8080")
 }
@@ -86,14 +95,16 @@ func searchData(c *fiber.Ctx) error {
 		}
 	}
 
+	// fmt.Println(wordList)
 	var wordQuery string
 	wordQuery += "(" + strings.Join(wordList, ",") + ")"
 
 	Load(wordQuery)
 	Root := MakeTree(fx)
 	Result := Search(Root, (*inputdata).Limit, startTime, endTime)
-	response := strings.Join(Result, "")
-	return c.SendString(response)
+	// response := strings.Join(Result, "")
+	// return c.SendString(response)
+	return c.JSON(Result)
 }
 
 func wordbreak(str string) (result string) {
