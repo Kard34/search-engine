@@ -1,2 +1,0 @@
-# iq-wordbreak
-Infoquest wordbreak
