@@ -95,15 +95,11 @@ func searchData(c *fiber.Ctx) error {
 		}
 	}
 
-	// fmt.Println(wordList)
 	var wordQuery string
 	wordQuery += "(" + strings.Join(wordList, ",") + ")"
-
 	Load(wordQuery)
 	Root := MakeTree(fx)
 	Result := Search(Root, (*inputdata).Limit, startTime, endTime)
-	// response := strings.Join(Result, "")
-	// return c.SendString(response)
 	return c.JSON(Result)
 }
 
