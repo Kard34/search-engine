@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -49,6 +50,7 @@ func main() {
 	Db = db
 	defer Db.Close()
 
+	log.Print("Starting the service.")
 	app := fiber.New()
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
@@ -57,6 +59,7 @@ func main() {
 	}))
 	app.Post("/search", searchData)
 	wordbreak("")
+	log.Print("The service is ready to listen and serve.")
 	app.Listen(":8080")
 }
 
@@ -114,6 +117,5 @@ func wordbreak(str string) (result string) {
 	breakonly := false
 	cutbetweencodepage := false
 	result = wbGo.BreakLine(di, str, true, breakonly, cutbetweencodepage)
-
 	return
 }
