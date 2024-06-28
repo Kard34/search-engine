@@ -1,11 +1,9 @@
 package main
 
 import (
-	"database/sql"
 	_ "embed"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -15,20 +13,17 @@ import (
 	wbGo "github.com/Kard34/search-engine/dataxet/iq-wordbreak"
 	"github.com/Kard34/search-engine/ftime"
 	"github.com/Kard34/search-engine/qp"
+	search_engine "github.com/Kard34/search-engine/search-engine"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type inputData struct {
-	Query string `json: "query"`
-	Limit int    `json: "limit"`
-}
-
-type responseData struct {
-	Date     string `json: "displaytime"`
-	DocID    string `json: "id"`
-	Headline string `json: "headline'`
+	Query    string `json: "query"`
+	Limit    int    `json: "limit"`
+	Offset   int    `json: "offset"`
+	Filename string `json: filename`
 }
 
 var (
@@ -40,16 +35,6 @@ var (
 )
 
 func main() {
-	fidx, err := os.Open(Path + Filename + ".idx")
-	checkerror(err)
-	Fidx = fidx
-	defer Fidx.Close()
-
-	db, err := sql.Open("sqlite3", Path+Filename+".sqlite")
-	checkerror(err)
-	Db = db
-	defer Db.Close()
-
 	log.Print("Starting the service.")
 	app := fiber.New()
 	app.Use(cors.New(cors.Config{
@@ -97,12 +82,11 @@ func searchData(c *fiber.Ctx) error {
 			wordList = append(wordList, "'"+item.Val+"'")
 		}
 	}
-
 	var wordQuery string
 	wordQuery += "(" + strings.Join(wordList, ",") + ")"
-	Load(wordQuery)
-	Root := MakeTree(fx)
-	Result := Search(Root, (*inputdata).Limit, startTime, endTime)
+
+	Result := search_engine.SearchFile(wordQuery, fx, (*inputdata).Limit, (*inputdata).Offset, startTime, endTime, (*inputdata).Filename)
+	fmt.Println("RESULT : ", len(Result))
 	return c.JSON(Result)
 }
 

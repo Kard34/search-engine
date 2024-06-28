@@ -1,4 +1,4 @@
-package main
+package search_engine
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -32,6 +31,12 @@ type ChunkData struct {
 	CountPosition int
 }
 
+type responseData struct {
+	Date     string `json: "displaytime"`
+	DocID    string `json: "id"`
+	Headline string `json: "headline'`
+}
+
 var (
 	Path     = "./Index/"
 	Filename = "20240129"
@@ -42,7 +47,31 @@ var (
 	CkData map[string]ChunkData
 )
 
-func Search(tree *Treenode, limit int, timex, timey ftime.CTime) (listdata []responseData) {
+func SearchFile(query string, node_list []qp.FlatNode, limit int, offset int, timex, timey ftime.CTime, filename string) (listdata []responseData) {
+	db, err := sql.Open("sqlite3", filename+".sqlite")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	Db = db
+	defer Db.Close()
+
+	fidx, err := os.Open(filename + ".idx")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	Fidx = fidx
+	defer Fidx.Close()
+
+	Load(query)
+	Root := MakeTree(node_list)
+	listdata = Search(Root, limit, offset, timex, timey)
+
+	return
+}
+
+func Search(tree *Treenode, limit int, offset int, timex, timey ftime.CTime) (listdata []responseData) {
 	Timex := ParseStr(TimeToStr(timex))
 	Timey := ParseStr(TimeToStr(timey))
 	Buffx := docInvert(Timex.Year(), int(Timex.Month()), Timex.Day(), Timex.Hour(), 0)
@@ -55,36 +84,49 @@ func Search(tree *Treenode, limit int, timex, timey ftime.CTime) (listdata []res
 	Buffy = append(Buffy, []byte{0, 0, 0}...)
 	ID_List := SearchData(tree, Buffx, Buffy)
 	placeholders := make([]string, len(ID_List))
-	args := make([]interface{}, len(ID_List))
+	args := make([]interface{}, len(ID_List)+4)
+	// xxx := make([]string, len(ID_List))
 	for i, id := range ID_List {
 		placeholders[i] = "?"
 		args[i] = id
+		// xxx[i] = "'" + strconv.Itoa(int(id)) + "'"
 	}
-	x := "SELECT DOCID, TIME64, HEADLINE FROM HDL WHERE INVDOCID IN (" + strings.Join(placeholders, ",") + ")"
+	args[len(args)-4] = timex.UnixMilli()
+	args[len(args)-3] = timey.UnixMilli()
+	args[len(args)-2] = limit
+	args[len(args)-1] = offset
+	x := `
+	SELECT DOCID, TIME64, HEADLINE 
+	FROM HDL 
+	WHERE INVDOCID IN` + `(` + strings.Join(placeholders, ",") + `)
+	AND TIME64 BETWEEN ? AND ?
+	ORDER BY TIME64
+	LIMIT ? OFFSET ?`
 	rows, err := Db.Query(x, args...)
-	checkerror(err)
+	checkERROR(err)
 	defer rows.Close()
 	for rows.Next() {
 		var DOCID string
 		var TIME64 int64
 		var HEADLINE string
-
 		err := rows.Scan(&DOCID, &TIME64, &HEADLINE)
-		checkerror(err)
-		if TIME64 >= timex.UnixMilli() && TIME64 <= timey.UnixMilli() {
-			DisplayTime := time.UnixMilli(int64(TIME64))
-			// listdata = append(listdata, DisplayTime.UTC().Format("2006-01-02T15:04:05")+" "+DOCID+" "+HEADLINE+"\n")
-			listdata = append(listdata, responseData{DisplayTime.UTC().Format("2006-01-02T15:04:05"), DOCID, HEADLINE})
-		}
+		checkERROR(err)
+
+		DisplayTime := time.UnixMilli(int64(TIME64))
+		listdata = append(listdata, responseData{DisplayTime.UTC().Format("2006-01-02T15:04:05"), DOCID, HEADLINE})
+
 		if len(listdata) >= limit {
 			break
 		}
 	}
-	sort.Slice(listdata, func(i, j int) bool {
-		tx, _ := time.Parse("2006-01-02T15:04:05", listdata[i].Date)
-		ty, _ := time.Parse("2006-01-02T15:04:05", listdata[j].Date)
-		return tx.Before(ty)
-	})
+	if err := rows.Err(); err != nil {
+		fmt.Println(err)
+	}
+	// sort.Slice(listdata, func(i, j int) bool {
+	// 	tx, _ := time.Parse("2006-01-02T15:04:05", listdata[i].Date)
+	// 	ty, _ := time.Parse("2006-01-02T15:04:05", listdata[j].Date)
+	// 	return tx.Before(ty)
+	// })
 	return
 }
 
@@ -320,7 +362,7 @@ func comparepharse(bo1 []byte, bo2 []byte, diff int) (buff []byte) {
 func Load(query string) {
 	x := "SELECT * FROM IDX WHERE WORD IN " + query
 	rows, err := Db.Query(x)
-	checkerror(err)
+	checkERROR(err)
 
 	CkData = map[string]ChunkData{}
 
@@ -334,7 +376,7 @@ func Load(query string) {
 		var COUNTPOSITION int
 
 		err := rows.Scan(&WORD, &INDEX, &POSITION, &ALLOCATE, &COUNTDOCMENT, &STARTPOSITION, &COUNTPOSITION)
-		checkerror(err)
+		checkERROR(err)
 		CkData[WORD] = ChunkData{INDEX, POSITION, ALLOCATE, COUNTDOCMENT, STARTPOSITION, COUNTPOSITION}
 	}
 	if err = rows.Err(); err != nil {
@@ -374,7 +416,7 @@ func maketree(data map[int]qp.FlatNode, head int) (root *Treenode) {
 	return
 }
 
-func checkerror(e error) {
+func checkERROR(e error) {
 	if e != nil {
 		fmt.Println(e)
 	}
